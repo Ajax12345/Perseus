@@ -1,0 +1,18 @@
+double val2 = 456.0;
+boolean !val3;
+int val = 500;
+assign val = 45;
+string firstval = "James";
+assign val3;
+assign val2 = 100.001;
+update val2 + 10000.0;
+int j1 = 56;
+update firstval +firstval;
+double s = 567.890;
+update val2/s;
+string s3 = "hello";
+string s5 = "James";
+update s3 + s5;
+store s3 = s5;
+!val3;
+output s3 -location.txt;
