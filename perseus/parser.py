@@ -28,20 +28,25 @@ class UnassignableTypes(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
 
+class InvalidOutputStatement(Exception):
+    def __init__(self, message):
+        Exception.__init__(self, message)
 
 class Parser:
     """
-    types: String, int, double, boolean
+    types: string, int, double, boolean
     """
     #TODO: find syntax errors: intval2=34; should be int val2 = 456;
-    __slots__ = ["file", "data_tree", "last_variable", "line_number", "operation_names"]
+    #TODO: add all errors to error queue, raise one error, and list issues
+    #IDEA: separate file for Perseus errors?
+    __slots__ = ["file", "data_tree", "last_variable", "line_number", "operation_names", "print_queue"]
     def __init__(self, the_file):
         self.file = the_file
         self.data_tree = defaultdict(dict)
         self.last_variable = None
         self.line_number = 1
         self.operation_names = {"+":["addition", lambda x, y:x+y], "*":["multplication", lambda x, y:x*y], "-":["subtraction", lambda x, y:x-y], "%":["modulo", lambda x, y:x%2], "/":["division", lambda x, y:x/y]}
-
+        self.print_queue = []
         print self.parse_stream(self.file)
         print self.data_tree
     def parse_int_declaration(self, line, need_digit, variable, value):
@@ -329,8 +334,25 @@ class Parser:
 
 
 
-    def parse_output_statement(self, line, var, seen_file):
-        pass
+    def parse_output_statement(self, line, var):
+        if line[0] == ";":
+            return var
+
+        else:
+
+            if line[0].isalpha() or line[0].isdigit() or line[0] in '""':
+                var += line[0]
+                return self.parse_output_statement(line[1:], var)
+
+            else:
+                raise InvalidSyntaxError("Line {}:output statement cannot contain spaces or operators".format(self.line_number))
+
+
+
+
+
+
+
 
 
 
@@ -355,7 +377,7 @@ class Parser:
                 if not re.findall("\d\.\d", line[0]):
                     name, variable = re.split("\s*=\s*", line[0][len("double "):])
 
-                    raise InvalidDeclaration("declared '{}' double, found integer".format(name))
+                    raise InvalidDeclaration("Line {}:declared '{}' double, found integer".format(self.line_number, name))
                 values = self.parse_double_declaration(line[0][len("double "):], False, '', '')
                 self.data_tree["Double"].update(values)
             elif line[0].startswith("string") and re.findall("^string\s", line[0]):
@@ -468,7 +490,22 @@ class Parser:
                 self.data_tree["Boolean"][variable] = not self.data_tree["Boolean"][variable]
 
             elif re.findall("^output\s", line[0]):
-                self.parse_output_statement(line, '', False)
+                variable = self.parse_output_statement(line[0][len("output "):], '')
+                print "variable", repr(variable)
+                if not variable.startswith('"') and variable.endswith('"') or variable.startswith('"') and not variable.endswith('"'):
+                    raise InvalidOutputStatement("Line {}: unbalanced quotes".format(self.line_number))
+
+                elif variable.startswith('"') and variable.endswith('"'):
+                    self.print_queue.append(variable[1:-1])
+                else:
+                    possibilites = [i for i in ["Double", "String", "Boolean", "Integer"] if variable in self.data_tree[i]]
+                    if not possibilites:
+                        raise VariableNotDeclared("Line {}: variable '{}' not found".format(self.line_number, variable))
+
+                    self.print_queue.append(self.data_tree[possibilites[0]][variable])
+
+
+
 
 
 
