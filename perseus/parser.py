@@ -62,7 +62,7 @@ class ListData:
 
 
     def initialize_list(self, line):
-        print "line", line
+
         if line[0] == ";":
             return self.final_list
 
@@ -123,6 +123,99 @@ class ListData:
     def __iter__(self):
         if self.flag:
             return self.new_final_line.__iter__()
+class ModifyList:
+    __slots__ = ["line", "seen_first_bracket", "seen_second_bracket", "current_element", "final_object", "list_name", "seen_t"]
+    def __init__(self, line, line_number):
+        self.line = line
+        self.seen_first_bracket = False
+        self.seen_second_bracket = False
+        self.current_element = ''
+        self.final_object = []
+        self.line_number = line_number
+        self.list_name = ''
+        self.seen_t = False
+        self.seen_o = False
+
+class AddToList(ModifyList):
+    __slots__ = ['final_list']
+    def __init__(self, line, line_number):
+        ModifyList.__init__(self, line, line_number)
+        self.final_list = self.parse_add_statement(self.line)
+
+    def parse_add_statement(self, line):
+
+        if line[0] == ";":
+            return self.final_object
+        else:
+            if line[0] == "[" and not self.seen_first_bracket:
+                self.seen_first_bracket = True
+                return self.parse_add_statement(line[1:])
+
+            elif line[0] == "t" and line[1] == "o":
+
+
+                self.seen_t = True
+                return self.parse_add_statement(line[2:])
+
+
+
+
+            elif line[0] == "[" and self.seen_first_bracket:
+                raise InvalidSyntaxError("Line {}: invalid syntax".format(self.line_number))
+
+            elif line[0] == "]" and self.seen_second_bracket:
+                raise InvalidSyntaxError("Line {}: invalid syntax".format(self.line_number))
+
+            elif line[0] == "]" and not self.seen_second_bracket:
+                self.seen_second_bracket = True
+                self.final_object.append(self.current_element)
+                return self.parse_add_statement(line[1:])
+
+            elif line[0] == " ":
+                return self.parse_add_statement(line[1:])
+
+            elif (line[0] == '"' or line[0].isdigit() or line[0].isalpha() or line[0] == ".") and self.seen_first_bracket and not self.seen_second_bracket:
+                self.current_element += line[0]
+
+                return self.parse_add_statement(line[1:])
+
+            elif (line[0] == '"' or line[0].isdigit() or line[0].isalpha() or line[0] == ".") and not self.seen_first_bracket:
+                raise InvalidSyntaxError("Line {}: invalid syntax".format(self.line_number))
+
+            elif line[0] == "," and self.seen_first_bracket and not self.seen_second_bracket:
+                self.final_object.append(self.current_element)
+                self.current_element = ''
+                return self.parse_add_statement(line[1:])
+
+            elif line[0] == "," and not self.seen_first_bracket:
+                raise InvalidSyntaxError("Line {}: invalid syntax".format(self.line_number))
+
+
+            elif line[0] == "t" and self.seen_second_bracket and not line[1] == "o":
+                raise InvalidSyntaxError("Line {}: invalid syntax".format(self.line_number))
+
+
+            elif line[0].isdigit() or line[0].isalpha() and self.seen_t:
+
+                self.list_name += line[0]
+
+                return self.parse_add_statement(line[1:])
+
+
+            else:
+                raise InvalidSyntaxError("Line {}: invalid syntax".format(self.line_number))
+
+    def __getattr__(self, val):
+
+        if val == "list":
+            return self.list_name
+
+        elif val == "payload":
+            return self.final_object
+
+        else:
+            raise Warning("internal error. Please check the code")
+
 
 
 class AssignValue(ListData):
@@ -151,7 +244,7 @@ class AssignValue(ListData):
                         raise InvalidSyntaxError("Line {}: unauthorized character".format(self.line_number))
 
                 elif self.seen_first_bracket and not self.seen_last_bracket:
-                    if line[0].isdigit():
+                    if line[0].isdigit() or line[0].isalpha():
                         self.index += line[0]
                         return self.get_assigment_data(line[1:])
 
@@ -178,7 +271,7 @@ class AssignValue(ListData):
                 if line[0] == " ":
                     return self.get_assigment_data(line[1:])
 
-                elif line[0].isdigit() or line[0].isalpha():
+                elif line[0].isdigit() or line[0].isalpha() or line[0] == '"':
                     self.current_variable += line[0]
                     return self.get_assigment_data(line[1:])
 
@@ -217,6 +310,7 @@ class Parser:
     #TODO: create 'increment' and 'decrement' keywords
     #TODO: modify assignment statements to be able to store function returns, list indices, etc.
     #TODO: support negative indicing?
+    #TODO: list item removal, appending
 
     __slots__ = ["file", "data_tree", "last_variable", "line_number", "operation_names", "print_queue"]
     def __init__(self, the_file):
@@ -728,8 +822,52 @@ class Parser:
                     raise VariableNotDeclared("Line {}: variable '{}' not found".format(self.line_number, variable_name))
                 if list_name not in self.data_tree["List"]:
                     raise VariableNotDeclared("Line {}: variable '{}' not found".format(self.line_number, list_name))
-                if int(index) >= len(self.data_tree["List"][list_name]):
-                    raise IndexOutOfBoundsError("Line {}: index of {} is greater than length of List {} (size of {})".format(self.line_number, int(index), list_name, len(self.data_tree["List"][list_name])))
+                if not index.isdigit():
+                    if index not in self.data_tree["Integer"]:
+                        raise IndexError("Line {}:variable not declared or variable of incorrect type".format(self.line_number))
+                    else:
+                        if self.data_tree["Integer"][index] >= len(self.data_tree["List"][list_name]):
+                            raise IndexOutOfBoundsError("Line {}: index of {} is greater than length of List {} (size of {})".format(self.line_number, self.data_tree["Integer"][index], list_name, len(self.data_tree["List"][list_name])))
+                        self.data_tree["Integer"][variable_name] = self.data_tree["List"][list_name][self.data_tree["Integer"][index]]
+                        try:
+                            del self.data_tree["Auto"][variable_name]
+                        except:
+                            pass
+                else:
+                    if int(index) >= len(self.data_tree["List"][list_name]):
+                        raise IndexOutOfBoundsError("Line {}: index of {} is greater than length of List {} (size of {})".format(self.line_number, int(index), list_name, len(self.data_tree["List"][list_name])))
+                    self.data_tree["Integer"][variable_name] = self.data_tree["List"][list_name][int(index)]
+                    try:
+                        del self.data_tree["Auto"][variable_name]
+                    except:
+                        pass
+
+            elif re.findall("^set\s", line[0]):
+                set_data = AssignValue(line[0][len("set "):], self.line_number)
+                index = set_data.index
+                list_name = set_data.list
+                variable_name = set_data.variable
+                if list_name not in self.data_tree["List"]:
+                    raise VariableNotDeclared("Line {}: variable '{}' not found".format(self.line_number, list_name))
+                if variable_name.startswith('"') and not variable_name.endswith('"') or  not variable_name.startswith('"') and variable_name.endswith('"'):
+                    raise InvalidSyntaxError("Line {}: unbalanced quotations in string declaration".format(self.line_number))
+                if not index.isdigit():
+                    if not any(variable_name in self.data_tree[i] for i in ["Integer"]):
+                        raise VariableNotDeclared("Line {}: variable '{}' not found".format(self.line_number, variable_name))
+                    else:
+                        index = self.data_tree["Integer"][index]
+                if index.isdigit():
+                    index = int(index)
+                if not variable_name.startswith('"') and not variable_name.endswith('"'):
+                    if not any(variable_name in self.data_tree[i] for i in ["Auto", "Boolean", "String", "Double", "Integer", "List"]):
+                        raise VariableNotDeclared("Line {}: variable '{}' not found".format(self.line_number, variable_name))
+                    variable_type = [i for i in ["Auto", "Boolean", "String", "Double", "Integer", "List"] if variable_name in self.data_tree[i]][0] #added List type, may not be necessary
+                    self.data_tree["List"][list_name][index] = self.data_tree[variable_type][variable_name]
+                else:
+                    self.data_tree["List"][list_name][index] = variable_name[1:-1]
+
+
+
 
 
             elif re.findall("^auto\s", line[0]):
@@ -739,7 +877,34 @@ class Parser:
                 new_variable_name = self.auto_parser(line[0][len("auto "):], '')
                 self.data_tree["Auto"][new_variable_name] = None
 
+            elif re.findall("^add\s", line[0]):
+                print "______here________"
+                a = AddToList(line[0][len('add '):], self.line_number)
+                list_name = a.list
+                to_add = a.payload
+                final_list = []
+                for val in to_add:
+                    if val.startswith('"') and not val.endswith('"') or not val.startswith('"') and val.endswith('"'):
+                        raise InvalidSyntaxError("Line {}: unbalanced quotes around string declaration".format(self.line_number))
 
+                    elif val.startswith('"') and val.endswith('"'):
+                        final_list.append(val[1:-1])
+
+                    elif re.findall('^\d+$', val):
+                        final_list.append(int(val))
+
+                    elif re.findall('^\d+\.\d+$', val):
+                        final_list.append(float(val))
+
+                    elif not val.startswith('"') and not val.endswith('"') and val.isalpha():
+                        possibilites = [i for i in ["Auto", "Boolean", "String", "Double", "Integer", "List"] if val in self.data_tree[i]]
+                        if not possibilites:
+                            raise VariableNotDeclared("Line {}: variable '{}' not found".format(self.line_number, val))
+                        final_list.append(self.data_tree[possibilites[0]][val])
+
+                if list_name not in self.data_tree["List"]:
+                    raise VariableNotDeclared("Line {}: variable '{}' not found".format(self.line_number, list_name))
+                self.data_tree["List"][list_name].extend(final_list)
 
 
 
@@ -751,3 +916,4 @@ class Parser:
 
 
 p = Parser([i.strip('\n') for i in open('sample_file.txt')])
+
