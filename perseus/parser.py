@@ -75,11 +75,15 @@ class If_Statement:
         #IDEA: have a "decrement" command and "increment" command
 
     def get_code_sections(self):
-        code_blocks = re.findall("\[(.*?)\]", self.contents)
-
-        return [b for b in [i+";" for i in re.split(';\s*', code_blocks[0])] if b != ";"]
+        print "self.contents", self.contents
+        #code_blocks = re.findall("\[(.*?)\]", self.contents) #should just be
+        code_blocks = self.contents[self.contents.index("[")+1:self.contents.rfind("]")]
+        print "code_blocks", code_blocks
+        print "final_code", [b for b in [i+";" for i in re.split(';\s*', code_blocks)] if b != ";"]
+        return [b for b in [i+";" for i in re.split(';\s*', code_blocks)] if b != ";"]
 
     def split_at_conditionals(self):
+
         return re.split("&|U", self.contents[:self.contents.index("[")]), "&" in self.contents[:self.contents.index("[")], "U" in self.contents[:self.contents.index("[")]
     def caste_to_types(self, l):
         if not l.startswith('"') and l.endswith('"') or l.startswith('"') and not l.endswith('"'):
@@ -1030,24 +1034,36 @@ class Parser:
             elif re.findall('^if\s', line[0]):
                 s = If_Statement(line[0][len("if "):], self.line_number, self.data_tree)
                 boolean, code = s.analyze_conditions()
-
+                print "in if statement __________"
+                print (boolean, code)
+                print "really boolean?", boolean
                 if boolean:
+                    print "got in here"
                     self.parse_stream(code)
                     self.passed_if = True
+
+                print "self.passed_if", self.passed_if
 
                 self.seen_if = True
 
 
             elif re.findall('^elif\s', line[0]):
+                print "in elif statement", line[0]
                 if not self.seen_if:
                     raise ControlFlowError("line {}: seen 'elif' statement with no preceding 'if' statement".format(self.line_number))
                 if not self.passed_if:
+                    print "here in elif statemnt"
                     s = If_Statement(line[0][len("elif "):], self.line_number, self.data_tree)
                     boolean, code = s.analyze_conditions()
+                    print "boolean elif", (boolean, code)
+                    print "int elif statement, boolean and code", (boolean, code)
                     if boolean:
                         self.parse_stream(code)
                         self.passed_if = True
+                else:
+                    print "did not execute elif statement"
             elif re.findall("^else\s", line[0]):
+
                 if not self.seen_if:
                     raise ControlFlowError("line {}: seen 'elif' statement with no preceding 'if' statement".format(self.line_number))
                 if not re.sub("^else\s+", '', line[0]).startswith("["):
