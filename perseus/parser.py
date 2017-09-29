@@ -52,6 +52,79 @@ class ControlFlowError(Exception):
         Exception.__init__(self, message)
 
 errors = []
+class ForLoop:
+    __slots__ = ["line", "line_number", 'index_variable', 'range', 'range_val1', 'range_val2', 'seen_first_mark', 'seen_first_bracket', 'seen_second_bracket', 'loop_code_block', 'final_range']
+    def __init__(self, line, line_number):
+        self.line = line
+        self.line_number = line_number
+        self.index_variable = ''
+        self.range = []
+        self.range_val1 = ''
+        self.range_val2 = ''
+        self.seen_first_mark = False
+        self.seen_first_bracket = False
+        self.seen_second_bracket = False
+        self.final_range, self.distance_index = self.parse_looping_statement(self.line)
+
+        self.loop_code_block = self.line[self.distance_index:]
+        brackets1 = [i for i, a in enumerate(self.loop_code_block) if a == "["]
+        brackets2 = [i for i, a in enumerate(self.loop_code_block) if a == "]"]
+        self.new_loop_code_block = self.loop_code_block[brackets1[0]+1:brackets2[-1]]
+        print "self.new_loop_code_block", self.new_loop_code_block
+        if not self.loop_code_block.endswith(";"):
+            raise InvalidSyntaxError("Line {}: missing closing ';'".format(self.line_number))
+        #self.loop_code_block = [i+";" for i in re.split(";?\s(?=\])", self.new_loop_code_block) if i]
+        self.loop_code_block = [i+";" for i in re.split("(?<=[\w\]]);\s*", self.new_loop_code_block) if i]
+        print "self.loop_code_block", self.loop_code_block
+
+    def parse_looping_statement(self, line):
+        if line[0] == ":" and line[1] == ":":
+            return self.range, self.line.index("::")
+        else:
+            if line[0].isalpha() or line[0].isdigit() and not self.seen_first_mark:
+                self.index_variable += line[0]
+                return self.parse_looping_statement(line[1:])
+            elif line[0] == ":" and not self.seen_first_mark:
+                if line[1] != ":":
+                    self.seen_first_mark = True
+                    return self.parse_looping_statement(line[1:])
+                else:
+                    raise InvalidSyntaxError("Line {}: invalid syntax".format(self.line_number))
+            elif line[0].isalpha() and self.seen_first_mark:
+                raise InvalidSyntaxError("Line {}: invalid syntax".format(self.line_number))
+            elif line[0] == " ":
+                return self.parse_looping_statement(line[1:])
+            elif line[0] == "[" and self.seen_first_bracket:
+                raise InvalidSyntaxError("Line {}: invalid syntax; double '['".format(self.line_number))
+
+            elif line[0] == "[" and not self.seen_first_bracket:
+                self.seen_first_bracket = True
+                return self.parse_looping_statement(line[1:])
+            elif line[0] == "]" and not self.seen_first_bracket:
+                raise InvalidSyntaxError("Line {}: invalid syntax".format(self.line_number))
+
+            elif line[0] == "]" and self.seen_second_bracket:
+                raise InvalidSyntaxError("Line {}: invalid syntax; double ']'".format(self.line_number))
+            elif line[0] == "]" and self.seen_first_bracket and not self.seen_second_bracket:
+                self.range.append(int(self.range_val1))
+
+                self.seen_second_bracket = True
+                return self.parse_looping_statement(line[1:])
+            elif line[0].isdigit() and self.seen_first_bracket and not self.seen_second_bracket:
+                self.range_val1 += line[0]
+                return self.parse_looping_statement(line[1:])
+
+            elif line[0] == ",":
+                self.range.append(int(self.range_val1))
+                self.range_val1 = ''
+                return self.parse_looping_statement(line[1:])
+
+    def get_final_variables(self):
+        return self.final_range, self.index_variable, self.loop_code_block
+
+
+
+
 
 class If_Statement:
     __slots__ = ["contents", "operators", "data_tree", "line_number"]
@@ -75,11 +148,10 @@ class If_Statement:
         #IDEA: have a "decrement" command and "increment" command
 
     def get_code_sections(self):
-        print "self.contents", self.contents
+
         #code_blocks = re.findall("\[(.*?)\]", self.contents) #should just be
         code_blocks = self.contents[self.contents.index("[")+1:self.contents.rfind("]")]
-        print "code_blocks", code_blocks
-        print "final_code", [b for b in [i+";" for i in re.split(';\s*', code_blocks)] if b != ";"]
+
         return [b for b in [i+";" for i in re.split(';\s*', code_blocks)] if b != ";"]
 
     def split_at_conditionals(self):
@@ -117,7 +189,7 @@ class If_Statement:
         #print "new_variables", new_variables
         new_variables = [(self.caste_to_types(a), self.caste_to_types(b), operator_type) if operator_type is not None else (self.caste_to_types([c for c in [a, b] if c][0]), None) for a, b, operator_type in [self.parse_if_statement(i+";", False, '', '') for i in parts]]
 
-        print new_variables
+
         truth_values = [self.operators[i[-1]](*i[:-1]) for i in new_variables]
         if len(truth_values) == 1:
             return truth_values[0], self.get_code_sections()
@@ -744,6 +816,7 @@ class Parser:
 
 
     def parse_output_statement(self, line, var):
+
         if line[0] == ";":
             return var
 
@@ -767,7 +840,7 @@ class Parser:
             if line[0].startswith("int") and re.findall("^int\s", line[0]):
 
                 integers = self.parse_int_declaration(line[0][len("int "):], False, '', '')
-                print integers
+
                 self.data_tree["Integer"].update(integers)
             elif line[0].startswith("double") and re.findall("^double\s", line[0]):
                 if not re.findall("\d\.\d", line[0]):
@@ -826,7 +899,7 @@ class Parser:
             elif re.findall("^update\s", line[0]):
                 final_dict, operation = self.parse_operations(line[0][len("update "):], '', '', False, False, '')
                 first, second = final_dict
-                print final_dict
+
                 isint = re.search("^\d+$", second)
                 isdouble = re.search("^\d+\.\d+$", second)
                 isstring = re.search('^.*?$', second)
@@ -887,7 +960,7 @@ class Parser:
 
             elif re.findall("^output\s", line[0]):
                 variable = self.parse_output_statement(line[0][len("output "):], '')
-                print "variable", repr(variable)
+
                 if not variable.startswith('"') and variable.endswith('"') or variable.startswith('"') and not variable.endswith('"'):
                     raise InvalidOutputStatement("Line {}: unbalanced quotes".format(self.line_number))
 
@@ -904,7 +977,7 @@ class Parser:
                 the_list = ListData(line[0][len("List "):], self.line_number, flag=True)
                 variable_name = the_list.variable_name
                 new_list = [i for i in the_list]
-                print "variable_name", variable_name, "the_list", new_list
+                #print "variable_name", variable_name, "the_list", new_list
 
                 new_final_list = []
                 for variable in new_list:
@@ -1003,7 +1076,7 @@ class Parser:
                 self.data_tree["Auto"][new_variable_name] = None
 
             elif re.findall("^add\s", line[0]):
-                print "______here________"
+                #print "______here________"
                 a = AddToList(line[0][len('add '):], self.line_number)
                 list_name = a.list
                 to_add = a.payload
@@ -1036,7 +1109,7 @@ class Parser:
                 boolean, code = s.analyze_conditions()
                 print "in if statement __________"
                 print (boolean, code)
-                print "really boolean?", boolean
+
                 if boolean:
                     print "got in here"
                     self.parse_stream(code)
@@ -1078,6 +1151,15 @@ class Parser:
                 self.passed_if = False
                 self.seen_if = False
 
+            elif re.findall("^for\s", line[0]):
+                looping = ForLoop(line[0][len("for "):], self.line_number)
+                the_range, the_index, the_code = looping.get_final_variables()
+                print "final looping info", (the_range, the_index, the_code)
+                print "the_code", the_code
+                for i in range(*the_range):
+                    print "here1"
+                    self.data_tree["Integer"][the_index] = i
+                    self.parse_stream(the_code)
 
             self.line_number += 1
 
