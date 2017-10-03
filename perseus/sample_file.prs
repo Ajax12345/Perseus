@@ -15,4 +15,21 @@ string s5 = "James";
 update s3 + s5;
 store s3 = s5;
 !val3;
-output s3 -location.txt;
+output s5;
+List l1 = ["James", 456, "Joe", s3, 345.232, True];
+List s18 = ["Joe", l1];
+List a = [56, 23, 45];
+int val20 = 0;
+int hello = 2;
+int n1 = 100;
+int n2 = 100;
+access a[hello] > val20;
+set a[1] > "l1";
+List james = ["hi"];
+add ["hi", 23, 23] to l1;
+
+if s5<s5 [output "yessadf"; int newval = 462; update j1 + 1000; if n1 / n2 [if n2 | 200 [output "hellohames";]; output "hiihi"; int newval13 = 456;]];
+elif s5|s5 [output "shouldbeseeningthis";];
+else [if s5<s5 [output "thisworked";];]
+for i: [1, 10]::[if i|2 [output "hi";]; else [output "no";];];
+foreach b:l1 [output "hello1"; if b|45 [output "ues1";]; else [output "no";];];
