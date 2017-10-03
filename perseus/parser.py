@@ -52,6 +52,48 @@ class ControlFlowError(Exception):
         Exception.__init__(self, message)
 
 errors = []
+class ForEachLoop:
+    __slots__ = ["line", "line_number", "element_name", "list_name", "seen_spacer"]
+    def __init__(self, line, line_number):
+        self.line = line
+        self.line_number = line_number
+        self.element_name = ''
+        self.list_name = ''
+        self.seen_spacer = False
+        self.element, self.the_list, self.codeblock = self.parse_for_each_loop(self.line)
+        print (self.element, self.the_list, self.codeblock)
+        brackets1 = [i for i, a in enumerate(self.codeblock) if a == "["]
+        brackets2 = [i for i, a in enumerate(self.codeblock) if a == "]"]
+        self.new_loop_code_block = self.codeblock[brackets1[0]+1:brackets2[-1]]
+        self.loop_code_block = [i+";" for i in re.split("(?<=[\w\]\W]);\s*(?!\])", self.new_loop_code_block) if i]
+        print "foreach loop code", self.loop_code_block
+
+
+
+    def parse_for_each_loop(self, line):
+        print "line", line
+        if line[0] == "[":
+            return self.element_name, self.list_name, line
+        else:
+            if (line[0].isdigit() or line[0].isalpha()) and not self.seen_spacer:
+                self.element_name += line[0]
+
+                return self.parse_for_each_loop(line[1:])
+            elif line[0] == ":":
+                self.seen_spacer = True
+                return self.parse_for_each_loop(line[1:])
+            elif (line[0].isdigit() or line[0].isalpha()) and self.seen_spacer:
+                print "line[0]", line[0]
+                self.list_name += line[0]
+                return self.parse_for_each_loop(line[1:])
+            elif line[0] == " ":
+                return self.parse_for_each_loop(line[1:])
+
+            else:
+                raise InvalidSyntaxError("Line {}: invalid syntax in looping header".format(self.line_number))
+
+
+
 class ForLoop:
     __slots__ = ["line", "line_number", 'index_variable', 'range', 'range_val1', 'range_val2', 'seen_first_mark', 'seen_first_bracket', 'seen_second_bracket', 'loop_code_block', 'final_range']
     def __init__(self, line, line_number):
@@ -130,10 +172,6 @@ class If_Statement:
     __slots__ = ["contents", "operators", "data_tree", "line_number"]
     def __init__(self, contents, line_number, data):
         self.contents = contents#will have to change to perticular conditinal expression
-        #TODO: parse if statement header only, then find lines of code
-        #TODO: implement parsing and running of block statements
-        #TODO: implement elif and else statements
-        #IDEA: I think that for "for" loops, a separate runtime environment needs to be created
         """
         control tokens: |, <, >, /, \
         """
@@ -506,6 +544,12 @@ class Parser:
     #TODO: modify assignment statements to be able to store function returns, list indices, etc.
     #TODO: support negative indicing?
     #TODO: list item removal, appending
+    #TODO: parse if statement header only, then find lines of code
+    #TODO: implement parsing and running of block statements
+    #TODO: implement elif and else statements
+    #IDEA: I think that for "for" loops, a separate runtime environment needs to be created
+    #TODO: check to acertain that listname provided in foreach loop is iterable
+    #TODO: put comparison statements in () to separate char lookups and flag calls
 
     __slots__ = ["file", "data_tree", "last_variable", "line_number", "operation_names", "print_queue", "seen_if", "passed_if"]
     def __init__(self, the_file):
@@ -1161,6 +1205,29 @@ class Parser:
                     self.data_tree["Integer"][the_index] = i
                     self.parse_stream(the_code)
 
+            elif re.findall("^foreach\s", line[0]):
+                the_loop = ForEachLoop(line[0][len('foreach '):], self.line_number) #can also be: the_loop = ForEachLoop(line[0][len('foreach'):], self.line_number)
+                l = the_loop.the_list
+                element = the_loop.element
+                code_block = the_loop.loop_code_block
+                if l not in self.data_tree["List"]:
+                    raise VariableNotDeclared("Line {}: could not find variable '{}' of type 'List'".format(self.line_number, l))
+                for val in self.data_tree["List"][l]:
+                    if isinstance(val, str):
+                        self.data_tree["String"][element] = val
+                    if isinstance(val, int):
+                        self.data_tree["Integer"][element] = val
+
+                    if isinstance(val, bool):
+                        self.data_tree["Boolean"][element] = val
+
+                    if isinstance(val, float):
+                        self.data_tree["Double"][element] = val
+                    if isinstance(val, float):
+                        self.data_tree["List"][element] = val
+                    self.parse_stream(code_block)
+
+
             self.line_number += 1
 
             return self.parse_stream(line[1:])
@@ -1170,3 +1237,4 @@ class Parser:
 
 p = Parser([i.strip('\n') for i in open('sample_file.txt')])
 print p.print_queue
+#for i: [1, 10]::[for b: [1, 10]::[output "val"; int newval13 = 100;];];
